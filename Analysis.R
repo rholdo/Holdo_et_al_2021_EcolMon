@@ -1,6 +1,7 @@
 # Seedling growth gradients interact with homogeneous disturbance regimes
 # to explain tree cover discontinuities in savannas
 # Code author: R. Holdo (rholdo@uga.edu)
+# Nov 11, 2021
 
 library(dplyr)
 library(ggplot2)
@@ -13,13 +14,14 @@ library(cowplot)
 library(sp)
 library(spdep)
 library(spatialEco)
+library(quantreg)
 
 # The following assumes you are using RStudio
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 df <- read.csv("Seedling_final.csv")
 # Note: 'Subplot' refers to an individual seedling
 # Extract species info to reuse later
-df.species <- subset(df, Per == 'Jun 2019')
+df.species <- subset(df, Per == 'Jun_2019')
 df.species <- df.species[, c(1,3)]
 
 # What proportion of individual stems were not found at some point in the study?
@@ -32,7 +34,7 @@ names(lost)[2] <- 'Lost'
 lost2plus <- subset(lost, Lost > 1)
 # These were 'lost' for more than 2 surveys. How many of these were
 # still missing by the last survey?
-lostfinal <- subset(df, Per == "Jun 2019" & Found == 0)
+lostfinal <- subset(df, Per == "Jun_2019" & Found == 0)
 lost2plus$Subplot
 lostfinal$Subplot
 # There is no overlap in the two groups
@@ -90,7 +92,7 @@ df$Basal_cm <- ifelse(is.na(df$Basal_cm) & df$Per == 'Initial', 0, df$Basal_cm)
 df$Ht_m <- ifelse(is.na(df$Ht_m) & df$Per == 'Initial', 0, df$Ht_m)
 year1 <- subset(df, Year == 2017)
 # Keep only seedlings that survived year 1
-year1IDs <- subset(year1, Per == "May 2017" & Alive == 1)
+year1IDs <- subset(year1, Per == "May_2017" & Alive == 1)
 year1 <- subset(year1, Subplot %in% year1IDs$Subplot)
 year1H0 <- subset(year1, Per == "Initial")
 year1H0 <- year1H0[, c(1,11)]
@@ -100,24 +102,24 @@ year1Hmax <- aggregate(Ht_m ~ Subplot, year1[year1$Per != "Initial", ],
 year1H <- merge(year1H0, year1Hmax, by = 'Subplot')
 names(year1H)[2:3] <- c("H0", "Hmax")
 
-year2 <- subset(df, Per == "May 2017" | Year == 2018)
+year2 <- subset(df, Per == "May_2017" | Year == 2018)
 # Keep only seedlings that survived year 2
-year2IDs <- subset(year2, Per == "May 2018" & Alive == 1)
+year2IDs <- subset(year2, Per == "May_2018" & Alive == 1)
 year2 <- subset(year2, Subplot %in% year2IDs$Subplot)
-year2H0 <- subset(year2, Per == "May 2017")
+year2H0 <- subset(year2, Per == "May_2017")
 year2H0 <- year2H0[, c(1,11)]
-year2Hmax <- aggregate(Ht_m ~ Subplot, year2[year2$Per != "May 2017", ],
+year2Hmax <- aggregate(Ht_m ~ Subplot, year2[year2$Per != "May_2017", ],
                        function(x){max(x, na.rm = TRUE)})
 year2H <- merge(year2H0, year2Hmax, by = 'Subplot')
 names(year2H)[2:3] <- c("H0", "Hmax")
 
-year3 <- subset(df, Per == "May 2018" | Year == 2019)
+year3 <- subset(df, Per == "May_2018" | Year == 2019)
 # Keep only seedlings that survived year 3
-year3IDs <- subset(year3, Per == "Jun 2019" & Alive == 1)
+year3IDs <- subset(year3, Per == "Jun_2019" & Alive == 1)
 year3 <- subset(year3, Subplot %in% year3IDs$Subplot)
-year3H0 <- subset(year3, Per == "May 2018")
+year3H0 <- subset(year3, Per == "May_2018")
 year3H0 <- year3H0[, c(1,11)]
-year3Hmax <- aggregate(Ht_m ~ Subplot, year3[year3$Per != "May 2018", ],
+year3Hmax <- aggregate(Ht_m ~ Subplot, year3[year3$Per != "May_2018", ],
                        function(x){max(x, na.rm = TRUE)})
 year3H <- merge(year3H0, year3Hmax, by = 'Subplot')
 names(year3H)[2:3] <- c("H0", "Hmax")
@@ -157,7 +159,7 @@ df.ag <- merge(df.ag, df.species)
 # Figure for calibration of light sensor data
 ldrcal <- read.csv("Light_cal.csv")
 ldrreg <- lm(log(PAR) ~ log(R), ldrcal)
-figA1 <- ggplot(ldrcal) + geom_point(aes(x = log(R), y = log(PAR)), 
+figS1_app_S1 <- ggplot(ldrcal) + geom_point(aes(x = log(R), y = log(PAR)), 
                                      shape = 21, size = 6, stroke = 2) +
   labs(x = expression(paste('log R (', Omega, ')')), 
        y = expression(paste('log PAR (', mu, 'mol m'^'-2', ' s'^'-1',')'))) +
@@ -172,7 +174,7 @@ figA1 <- ggplot(ldrcal) + geom_point(aes(x = log(R), y = log(PAR)),
         axis.ticks.length = unit(.25, "cm"),
         legend.title = element_text(size = rel(2)),
         legend.text = element_text(size = rel(2)))
-figA1 <- figA1 + geom_abline(intercept = coef(ldrreg)[1], slope = coef(ldrreg)[2], lwd = 1.2) +
+figS1_app_S1 <- figS1_app_S1 + geom_abline(intercept = coef(ldrreg)[1], slope = coef(ldrreg)[2], lwd = 1.2) +
   annotate("text", x = 6.5, y = 6, label = "R ^ 2 == 0.99", parse = TRUE, size = 8)
 
 # Obtain TC data, recalculate distances, combine with transect data
@@ -277,7 +279,7 @@ tcid$Habitat <- ifelse(tcid$Distpca <= tcid$Brkdist, "Open", "Woody")
 # Transect plot for appendix
 sitecode <- c("FS", "IK", "MA", "MM", "SI", "SO", "TA", "TO")
 tcid$Transect <- factor(sitecode[as.numeric(as.factor(tcid$Site))])
-figB1 <- ggplot(tcid) + geom_point(aes(x = Distpca, y = TC30, fill = Habitat), 
+figS1_app_S2 <- ggplot(tcid) + geom_point(aes(x = Distpca, y = TC30, fill = Habitat), 
                                    shape = 21, size = 4) +
   facet_wrap(~ Transect) +
   labs(x = 'Distance (m)', 
@@ -342,7 +344,6 @@ seedsum$Area <- ifelse(seedsum$Habitat == 'Open', seedsum$Brkdist * 3,
 names(seedsum)[3] <- 'N'
 seedsum$Density <- seedsum$N / seedsum$Area * 1e4 # Density in seedlings / ha
 
-# Plot for appendix figures
 # Tree basal area and seedling density across habitats
 # Fill in 0's for seedsum - integrate with bassum
 seedsum2 <- seedsum[, c(1,2,7)]
@@ -367,7 +368,7 @@ fig2a <- ggplot(bassum, aes(x = Habitat, y = BA)) +
 fig2b <- ggplot(bassum, aes(x = Habitat, y = Density)) +
   geom_line(aes(group = Site), lwd=1.2) + 
   labs(x = 'Habitat', 
-       y = expression(paste('Seedlings ha'^-1))) +
+       y = expression(paste('Saplings ha'^-1))) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -407,7 +408,7 @@ Density.test <- t.test(bassum$Density[1:8], bassum$Density[9:16], alternative = 
 Height.test <- t.test(bassum$Ht[1:8], bassum$Ht[9:16], alternative = "less",
                        paired = TRUE)
 
-# Rough calculation of crown area to be expected from current seedlings/gullivers
+# Rough calculation of crown area to be expected from current juvenile trees
 # moving into the adult class
 Seed.mean <- mean(seedsum$Density)
 Cr.area.proj <- Seed.mean * Cr.mean # Mean crown projected area (no overlap)
@@ -415,7 +416,7 @@ Cr.area.proj / 1e4
 # Mean projected crown area for all escaped seedlings is about 0.034
 
 # TC30 as a function of basal area
-figC1 <- ggplot(tchab) + geom_point(aes(x = BA, y = TC30, fill = Habitat), 
+figS2 <- ggplot(tchab) + geom_point(aes(x = BA, y = TC30, fill = Habitat), 
                                     shape = 21, size = 6) +
   labs(x = expression(paste('Basal area (m'^2,' ha'^-1,')')), 
        y = expression(paste('TC'[30]))) +
@@ -433,7 +434,7 @@ figC1 <- ggplot(tchab) + geom_point(aes(x = BA, y = TC30, fill = Habitat),
         legend.title = element_text(size = rel(2)),
         legend.text = element_text(size = rel(2)))
 lpred <- summary(lm(TC30 ~ BA, tchab))
-figC1 <- figC1 + geom_abline(slope = coef(lpred)[2], intercept = coef(lpred)[1], lwd = 1.2) +
+figS2 <- figS2 + geom_abline(slope = coef(lpred)[2], intercept = coef(lpred)[1], lwd = 1.2) +
   annotate("text", x = 4, y = 0.2, label = "P = 0.0016", parse = FALSE, size = 8)
 
 # Stats
@@ -518,7 +519,7 @@ df.ag.ht <- merge(df.ag.ht, perday)
 hts <- df[, c(6,1,11)]
 hinit <- subset(hts, Per == 'Initial')
 hinit$Per <- NULL
-hfinal <- subset(hts, Per == 'Jun 2019')
+hfinal <- subset(hts, Per == 'Jun_2019')
 hfinal$Per <- NULL
 htgr <- df.ag[, c(1,9)]
 hinit <- merge(hinit, hfinal, by = 'Subplot')
@@ -542,6 +543,20 @@ fig3 <- ggplot(NULL, aes(x = Day, y = Ht_m)) +
         axis.line = element_line(colour="black"),
         axis.ticks = element_line(colour="black"),
         axis.ticks.length = unit(.25, "cm"))
+
+# For compositional analysis, identify species that are present in only
+# open or woody habitats
+sp.site <- table(df.ag$Species, df.ag$Site)
+sp.count <- data.frame(rownames(sp.site))
+names(sp.count) <- 'Species'
+sp.count$Nsites <- 0
+for(i in 1:nrow(sp.site)){ 
+  sp.count$Nsites[i] <- sum(sp.site[i,] > 0)
+}
+# Include only species occurring on 2 or more sites
+sp.count <- subset(sp.count, Nsites > 1)
+sp.hab <- table(df.ag$Species, df.ag$Habitat)
+# All species occurring in two or more sites were present in both habitats
 
 # For Gaussian models, fit spatial lme models with site random effects
 # Exponential autocorrelation models
@@ -598,6 +613,22 @@ summary(fit.deltaH.undam.exp)
 summary(fit.Grass.exp)
 summary(fit.Topkill.exp)
 summary(fit.Damage.exp)
+
+# Test whether the addition of a quadratic term improves growth model
+# Transform from proportion to percentage for convergence
+fit.deltaH.undam.exp.lin <- lme(deltaH.undam ~ I(TC30 * 100),
+                                 data = df.ag,
+                                 random = ~ 1 | Site,
+                                 corr = corSpatial(form = ~ X + Y, type ="exponential", nugget = F), 
+                                 method = "ML", na.action = 'na.exclude')
+fit.deltaH.undam.exp.quad <- lme(deltaH.undam ~ I(TC30 * 100) + I((TC30 * 100)^2),
+                            data = df.ag,
+                            random = ~ 1 | Site,
+                            corr = corSpatial(form = ~ X + Y, type ="exponential", nugget = F), 
+                            method = "ML", na.action = 'na.exclude')
+anova(fit.deltaH.undam.exp.lin, fit.deltaH.undam.exp.quad)
+summary(fit.deltaH.undam.exp.quad)
+# No support for a quadratic term
 
 # Re-examine growth patterns for more common species
 df.acator <- subset(df.ag, Species == 'ACATOR')
@@ -808,9 +839,9 @@ summary(lm(He.slope.auto ~ 1, regs))
 summary(lm(Mo.slope ~ 1, regs))
 summary(lm(Mo.slope.auto ~ 1, regs))
 
-tableE1 <- regs
-tableE1[, 2:16] <- round(tableE1[, 2:16], 3)
-write.csv(tableE1, "Table_E1.csv", row.names = FALSE)
+tableS2 <- regs
+tableS2[, 2:16] <- round(tableS2[, 2:16], 3)
+write.csv(tableS2, "Table_S2.csv", row.names = FALSE)
 
 # Mortality declines with tree cover
 # Is mortality related to damage?
@@ -1126,6 +1157,8 @@ ITER <- 100 # Bootstrapped iterations
 # Growth and mortality
 gr <- matrix(nrow = ITER, ncol = 2)
 gr.u <- matrix(nrow = ITER, ncol = 2)
+gr.max <- matrix(nrow = ITER, ncol = 2)
+gr.u.max <- matrix(nrow = ITER, ncol = 2)
 mo <- matrix(nrow = ITER, ncol = 3)
 gr.alt <- numeric(ITER) # Alternative parameterization where growth is unrelated to TC
 gr.u.alt <- numeric(ITER)
@@ -1143,9 +1176,13 @@ for (i in 1:ITER){
   sim.gr <- lm(deltaH ~ TC30, df.boot, na.action = "na.omit")
   sim.gr.undam <- lm(deltaH.undam ~ TC30, df.boot, na.action = "na.omit")
   sim.mreg <- glm(Dead ~ TC30 + Damage, df.boot, na.action = "na.omit", family = binomial)
+  sim.gr.max <- rq(deltaH ~ TC30, tau = 0.95, data = df.boot)
+  sim.gr.u.max <- rq(deltaH.undam ~ TC30, tau = 0.95, data = df.boot)
   gr[i, ] <- coef(sim.gr)
   gr.u[i, ] <- coef(sim.gr.undam)
   mo[i, ] <- coef(sim.mreg)
+  gr.max[i, ] <- coef(sim.gr.max)
+  gr.u.max[i, ] <- coef(sim.gr.u.max)
   # Disturbance does not
   he[i] <- mean(df.boot$H2019.bin, na.rm = TRUE)
   fi[i] <- mean(df.boot$F2019.bin, na.rm = TRUE)
@@ -1176,7 +1213,7 @@ for (s in 1:4){
     sim$TC <- rep(seq(from = 0, to = 0.45, by = 0.05), each = 1000)
     sim$Dam <- 0
     sim$Esc <- 0
-    # Cycle through 500 time steps
+    # Cycle through 1000 time steps
     for (t in 1:1000){
       sim$H <- ifelse(sim$Dam == 0, sim$H + gr.u[i,1] + gr.u[i,2] * sim$TC,
                       sim$H + gr[i,1] + gr[i,2] * sim$TC)
@@ -1213,7 +1250,7 @@ for (s in 1:4){
     sim$TC <- rep(seq(from = 0, to = 0.45, by = 0.05), each = 1000)
     sim$Dam <- 0
     sim$Esc <- 0
-    # Cycle through 100 time steps
+    # Cycle through 1000 time steps
     for (t in 1:1000){
       sim$H <- ifelse(sim$Dam == 0, sim$H + gr.u[i,1] + gr.u[i,2] * sim$TC,
                       sim$H + gr[i,1] + gr[i,2] * sim$TC)
@@ -1249,8 +1286,8 @@ for (s in 1:4){
     sim$TC <- rep(seq(from = 0, to = 0.45, by = 0.05), each = 1000)
     sim$Dam <- 0
     sim$Esc <- 0
-    # Cycle through 100 time steps
-    for (t in 1:100){
+    # Cycle through 1000 time steps
+    for (t in 1:1000){
       sim$H <- ifelse(sim$Dam == 0, sim$H + gr.u.alt[i],
                       sim$H + gr.alt[i])
       # Probability of herbivory
@@ -1294,11 +1331,11 @@ sim.all <- sim.all[, c(5,3,1,4,2)]
 sim.all <- rbind(sim.all.ag, sim.all)
 
 # Save simulation results
-write.csv(sim.all, "Simulation_results_final.csv", row.names = FALSE)
+write.csv(sim.all, "Simulation_results_finalb.csv", row.names = FALSE)
 sim.all <- read.csv("Simulation_results_final.csv")
 sim.all$f <- ifelse(sim.all$f == 0.1, 'f = 0.1',
                     ifelse(sim.all$f == 1, 'f = 1.0', 
-                           ifelse(sim.all$f == 1.5, 'F = 1.5', 'f = 0.5')))
+                           ifelse(sim.all$f == 1.5, 'f = 1.5', 'f = 0.5')))
 sim.all$f <- as.factor(sim.all$f)
 
 fig8 <- ggplot(NULL, aes(x = TC, y = Esc)) + 
@@ -1307,6 +1344,106 @@ fig8 <- ggplot(NULL, aes(x = TC, y = Esc)) +
   facet_grid(rows = vars(f), cols = vars(Scen)) +
 labs(x = expression(paste('TC'[30])), 
      y = 'Escape probability') +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_text(size = rel(1.2)),
+        axis.title.y = element_text(angle=90, vjust = 2, size = rel(1.5)),
+        axis.title.x = element_text(vjust = 0, size = rel(1.5)),
+        axis.text = element_text(size = rel(1.2)),
+        axis.line = element_line(colour="black"),
+        axis.ticks = element_line(colour="black"),
+        axis.ticks.length = unit(.25, "cm"))
+
+# Redo simulations (with f = 1 only) for two additional cases for comparison:
+# Escape height of 3 m instead of 2 (sim4), and taking maximum growth instead of mean (sim5)
+sim.all2 <- subset(sim.all, f == 'f = 1.0' & Scen == 'Scenario 1')
+sim.all2$f <- NULL
+for (s in 3:3){
+  for (i in 1:ITER){
+    H <- numeric(N) 
+    sim <- data.frame(H)
+    sim$TC <- rep(seq(from = 0, to = 0.45, by = 0.05), each = 1000)
+    sim$Dam <- 0
+    sim$Esc <- 0
+    # Cycle through 500 time steps
+    for (t in 1:1000){
+      sim$H <- ifelse(sim$Dam == 0, sim$H + gr.u[i,1] + gr.u[i,2] * sim$TC,
+                      sim$H + gr[i,1] + gr[i,2] * sim$TC)
+      sim$Dam <- rbinom(N, size = 1, prob = he[i] * f[s]) + 
+        rbinom(N, size = 1, prob = fi[i] * f[s])
+      sim$Dam <- ifelse(sim$Dam == 2, 1, sim$Dam)
+      topkilled <- rbinom(N, size = 1, prob = tk[i] * f[s])
+      sim$H <- ifelse(topkilled == 1 & sim$Esc == 0, 0, sim$H)
+      # Probability of mortality (depends on TC and damage)
+      lp.m <- mo[i,1] + mo[i,2] * sim$TC + mo[i,3] * sim$Dam # Linear predictor for inverse logit
+      prob.m.3y <- exp(lp.m) / (exp(lp.m) + 1) # Three-year probability of mortality - annualize
+      prob.m.1y <- 1 - (1 - prob.m.3y) ^ (1/3)
+      Dead <- rbinom(N, size = 1, prob = prob.m.1y)
+      # Assume dead trees are removed and replaced with new seedlings on height 0
+      sim$H <- ifelse(Dead == 1 & sim$Esc == 0, 0, sim$H)
+      sim$Esc <- ifelse(sim$H > 3, 1, 0)
+    }
+    # Calculate proportion escaped for each TC class
+    sim.ag <- aggregate(Esc ~ TC, sim, mean)
+    sim.ag$ITER <- i
+    if (i == 1) sim4 <- sim.ag
+    else sim4 <- rbind(sim4, sim.ag)
+    cat(i, '\n')
+  }
+}
+sim4$Scen <- "Scenario 4"
+
+# Recalculate growth parameters based on maximum rather than mean growth
+for (s in 3:3){
+  for (i in 1:ITER){
+    H <- numeric(N) 
+    sim <- data.frame(H)
+    sim$TC <- rep(seq(from = 0, to = 0.45, by = 0.05), each = 1000)
+    sim$Dam <- 0
+    sim$Esc <- 0
+    # Cycle through 500 time steps
+    for (t in 1:1000){
+      sim$H <- ifelse(sim$Dam == 0, sim$H + gr.u.max[i,1] + gr.u.max[i,2] * sim$TC,
+                      sim$H + gr.max[i,1] + gr.max[i,2] * sim$TC)
+      sim$Dam <- rbinom(N, size = 1, prob = he[i] * f[s]) + 
+        rbinom(N, size = 1, prob = fi[i] * f[s])
+      sim$Dam <- ifelse(sim$Dam == 2, 1, sim$Dam)
+      topkilled <- rbinom(N, size = 1, prob = tk[i] * f[s])
+      sim$H <- ifelse(topkilled == 1 & sim$Esc == 0, 0, sim$H)
+      # Probability of mortality (depends on TC and damage)
+      lp.m <- mo[i,1] + mo[i,2] * sim$TC + mo[i,3] * sim$Dam # Linear predictor for inverse logit
+      prob.m.3y <- exp(lp.m) / (exp(lp.m) + 1) # Three-year probability of mortality - annualize
+      prob.m.1y <- 1 - (1 - prob.m.3y) ^ (1/3)
+      Dead <- rbinom(N, size = 1, prob = prob.m.1y)
+      # Assume dead trees are removed and replaced with new seedlings on height 0
+      sim$H <- ifelse(Dead == 1 & sim$Esc == 0, 0, sim$H)
+      sim$Esc <- ifelse(sim$H > 2, 1, 0)
+    }
+    # Calculate proportion escaped for each TC class
+    sim.ag <- aggregate(Esc ~ TC, sim, mean)
+    sim.ag$ITER <- i
+    if (i == 1) sim5 <- sim.ag
+    else sim5 <- rbind(sim5, sim.ag)
+    cat(i, '\n')
+  }
+}
+sim5$Scen <- "Scenario 5"
+sim45 <- rbind(sim4, sim5)
+sim45.ag <- aggregate(Esc ~ Scen + TC, sim45, mean)
+sim45.ag$ITER <- 0
+sim45.ag <- sim45.ag[ ,c(1,2,4,3)]
+sim45 <- sim45[ ,c(4,1:3)]
+sim45 <- rbind(sim45.ag, sim45)
+sim.all2 <- rbind(sim.all2, sim45)
+
+figS3 <- ggplot(NULL, aes(x = TC, y = Esc)) + 
+  geom_line(data = subset(sim.all2, ITER != "0"), aes(group = ITER)) +
+  geom_line(data = subset(sim.all2, ITER == "0"), col = 'red', lwd = 1.2) + 
+  facet_wrap(~ Scen, nrow = 1) +
+  labs(x = expression(paste('TC'[30])), 
+       y = 'Escape probability') +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
