@@ -1,4 +1,4 @@
-# Holdo_et_al_2021_EcolMon
+# Holdo_et_al_2022_EcolMon
 Source code and data for analysis of Serengeti seedling demography
 
 The Analysis.R file replicates all analyses and figures in the paper
